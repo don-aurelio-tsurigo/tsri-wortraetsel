@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tsüri Worträtsel – Stats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F6F4EF;
+    --ink: #1B1B1B;
+    --line: #E3DFD3;
+    --correct: #3AA76D;
+    --accent: #2F80ED;
+    --muted: #6B6656;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 20px 60px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin: 0 0 28px; }
+
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .summary-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .summary-card .label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .summary-card .value { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+  th, td { padding: 10px 12px; text-align: right; font-size: 13px; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #EFEBDF; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); }
+  tbody tr:not(:last-child) { border-bottom: 1px solid var(--line); }
+  td.mono { font-family: 'IBM Plex Mono', monospace; }
+  .winrate-bar-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .winrate-bar { width: 60px; height: 6px; border-radius: 4px; background: var(--line); overflow: hidden; }
+  .winrate-bar div { height: 100%; background: var(--correct); }
+
+  #status { color: var(--muted); font-size: 13px; }
+  .controls { margin-bottom: 16px; display: flex; gap: 8px; }
+  .controls button {
+    -webkit-appearance: none; appearance: none;
+    border: 1px solid var(--line); background: #fff; border-radius: 6px;
+    padding: 6px 12px; font-family: inherit; font-size: 12px; cursor: pointer;
+  }
+  .controls button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tsüri Worträtsel – Stats</h1>
+  <p class="subtitle">Tägliche Spielzahlen, live aus der D1-Datenbank.</p>
+
+  <div class="controls" id="controls">
+    <button data-days="7">7 Tage</button>
+    <button data-days="30" class="active">30 Tage</button>
+    <button data-days="90">90 Tage</button>
+  </div>
+
+  <div id="status">Lade Daten…</div>
+  <div id="content" style="display:none;">
+    <div class="summary-row" id="summaryRow"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Datum</th>
+          <th>Spiele</th>
+          <th>Siege</th>
+          <th>Gewinnrate</th>
+          <th>Ø Versuche</th>
+          <th>Ø Zeit</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const statusEl = document.getElementById("status");
+const contentEl = document.getElementById("content");
+const summaryRowEl = document.getElementById("summaryRow");
+const tableBodyEl = document.getElementById("tableBody");
+const controlsEl = document.getElementById("controls");
+
+function formatSeconds(sec) {
+  if (sec === null || sec === undefined) return "–";
+  const s = Math.round(sec);
+  const m = Math.floor(s / 60);
+  const rest = s % 60;
+  return m > 0 ? m + ":" + String(rest).padStart(2, "0") : s + "s";
+}
+
+function formatDate(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("de-CH", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+
+async function loadStats(days) {
+  statusEl.textContent = "Lade Daten…";
+  statusEl.style.display = "block";
+  contentEl.style.display = "none";
+  try {
+    const res = await fetch("/api/stats?days=" + days);
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      statusEl.textContent = data.error || "Fehler beim Laden der Stats.";
+      return;
+    }
+    render(data.days);
+  } catch (err) {
+    statusEl.textContent = "Verbindung fehlgeschlagen.";
+  }
+}
+
+function render(days) {
+  if (!days.length) {
+    statusEl.textContent = "Noch keine abgeschlossenen Spiele im gewählten Zeitraum.";
+    return;
+  }
+  statusEl.style.display = "none";
+  contentEl.style.display = "block";
+
+  const totalSpiele = days.reduce((sum, d) => sum + d.spiele, 0);
+  const totalSiege = days.reduce((sum, d) => sum + (d.siege || 0), 0);
+  const winrate = totalSpiele ? Math.round((totalSiege / totalSpiele) * 100) : 0;
+  const avgAttemptsAll =
+    days.reduce((sum, d) => sum + (d.avg_versuche || 0) * d.spiele, 0) / (totalSpiele || 1);
+
+  summaryRowEl.innerHTML = `
+    <div class="summary-card"><div class="label">Spiele total</div><div class="value">${totalSpiele}</div></div>
+    <div class="summary-card"><div class="label">Siege total</div><div class="value">${totalSiege}</div></div>
+    <div class="summary-card"><div class="label">Gewinnrate</div><div class="value">${winrate}%</div></div>
+    <div class="summary-card"><div class="label">Ø Versuche</div><div class="value">${avgAttemptsAll.toFixed(1)}</div></div>
+  `;
+
+  tableBodyEl.innerHTML = days
+    .map((d) => {
+      const rate = d.spiele ? Math.round(((d.siege || 0) / d.spiele) * 100) : 0;
+      return `
+        <tr>
+          <td>${formatDate(d.date)}</td>
+          <td class="mono">${d.spiele}</td>
+          <td class="mono">${d.siege || 0}</td>
+          <td>
+            <div class="winrate-bar-cell">
+              <span class="mono">${rate}%</span>
+              <div class="winrate-bar"><div style="width:${rate}%"></div></div>
+            </div>
+          </td>
+          <td class="mono">${d.avg_versuche ?? "–"}</td>
+          <td class="mono">${formatSeconds(d.avg_zeit_sekunden)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+controlsEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-days]");
+  if (!btn) return;
+  controlsEl.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  loadStats(btn.dataset.days);
+});
+
+loadStats(30);
+</script>
+</body>
+</html>
