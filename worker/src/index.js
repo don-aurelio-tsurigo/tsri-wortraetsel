@@ -23,6 +23,28 @@ function pickFallbackWord(dateStr) {
   return FALLBACK_WORDS[hash % FALLBACK_WORDS.length];
 }
 
+// Slack-Benachrichtigung, wenn der Worker aufs Fallback-Wort ausweichen muss
+// (also wenn Notion nicht erreichbar ist UND kein zwischengespeichertes Wort
+// mehr da ist). Mit Abkühlzeit, damit bei einem längeren Ausfall nicht bei
+// jeder Anfrage eine neue Nachricht rausgeht.
+let lastAlertAt = 0;
+const ALERT_COOLDOWN_MS = 15 * 60 * 1000; // 15 Minuten
+
+function notifySlack(env, ctx, message) {
+  if (!env.SLACK_WEBHOOK_URL) return; // Feature ist aus, solange kein Webhook gesetzt ist
+  const now = Date.now();
+  if (now - lastAlertAt < ALERT_COOLDOWN_MS) return;
+  lastAlertAt = now;
+
+  const promise = fetch(env.SLACK_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: message }),
+  }).catch((err) => console.error("Slack-Benachrichtigung fehlgeschlagen:", err.message));
+
+  if (ctx?.waitUntil) ctx.waitUntil(promise);
+}
+
 // einfacher In-Memory-Cache pro Worker-Instanz, damit nicht bei jedem
 // Rateversuch neu bei Notion angefragt werden muss
 let cache = { word: null, fetchedAt: 0 };
@@ -59,7 +81,7 @@ function todayZurichISODate() {
   return fmt.format(new Date()); // ergibt z.B. "2026-07-27"
 }
 
-async function getActiveWord(env) {
+async function getActiveWord(env, ctx) {
   const now = Date.now();
   if (cache.word && now - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.word;
@@ -121,12 +143,22 @@ async function getActiveWord(env) {
     // geholt haben, nutzen wir das weiter (auch wenn's älter als 60s ist).
     if (cache.word) {
       console.error("Notion-Abfrage fehlgeschlagen, nutze letztes bekanntes Wort:", err.message);
+      notifySlack(
+        env,
+        ctx,
+        `⚠️ Tsüri Worträtsel: Notion-Abfrage fehlgeschlagen, nutze zwischengespeichertes Wort weiter.\nFehler: ${err.message}`
+      );
       return cache.word;
     }
     // Kein gecachtes Wort vorhanden (z.B. Cold Start genau während eines
     // Notion-Ausfalls): deterministisches Fallback-Wort für den heutigen Tag,
     // damit das Spiel trotzdem für alle gleich spielbar bleibt.
     console.error("Notion-Abfrage fehlgeschlagen, nutze Fallback-Wort:", err.message);
+    notifySlack(
+      env,
+      ctx,
+      `⚠️ Tsüri Worträtsel: Notion nicht erreichbar, Fallback-Wort wird verwendet.\nFehler: ${err.message}`
+    );
     return pickFallbackWord(todayZurichISODate());
   }
 }
@@ -189,7 +221,7 @@ export default {
     // GET /api/status -> nur unkritische Infos fürs Frontend beim Laden
     if (url.pathname === "/api/status" && request.method === "GET") {
       try {
-        const word = await getActiveWord(env); // stellt sicher, dass ein gültiges Wort existiert
+        const word = await getActiveWord(env, ctx); // stellt sicher, dass ein gültiges Wort existiert
         const wordId = await getWordId(word);
         return jsonResponse(
           { ok: true, wordLength: WORD_LENGTH, maxAttempts: 6, wordId },
@@ -230,7 +262,7 @@ export default {
 
       let answer;
       try {
-        answer = await getActiveWord(env);
+        answer = await getActiveWord(env, ctx);
       } catch (err) {
         return jsonResponse({ error: err.message }, 503, headers);
       }
