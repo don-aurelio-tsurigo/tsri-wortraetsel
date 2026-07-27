@@ -232,16 +232,31 @@
     cursor: pointer;
     text-decoration: underline;
   }
-  .promo-banner {
+  .message-box {
     background: #FEF3C7;
-    color: #92400E;
+    color: #6B4E00;
     font-size: 13px;
     font-weight: 600;
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 14px 14px 12px;
     margin-bottom: 16px;
     line-height: 1.4;
   }
+  .message-box p { margin: 0; }
+  .message-btn {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: #1A1A1B;
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    text-decoration: none;
+    border-radius: 6px;
+  }
+  .message-btn:active { background: #333; }
+  .message-btn.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -254,9 +269,12 @@
 
 <div id="successModal" class="modal-overlay hidden">
   <div class="modal">
-    <div class="promo-banner">Du bist eine Legende! Zur Feier des Tages schenken wir dir 10% Rabatt im Tsüri-Shop.</div>
-    <h2 id="successTitle">Gschafft!</h2>
+    <h2>Gschafft! 🎉</h2>
     <p class="modal-time">Gelöst in <strong id="successTime">0:00</strong></p>
+    <div class="message-box">
+      <p id="messageText"></p>
+      <a class="message-btn hidden" id="messageBtn" href="#" target="_blank" rel="noopener"></a>
+    </div>
     <div class="share-grid" id="shareGrid"></div>
     <div class="icon-btn-row">
       <button class="icon-btn whatsapp" id="shareWhatsapp" title="Via WhatsApp teilen" aria-label="Via WhatsApp teilen">
@@ -284,14 +302,44 @@ const KEYBOARD_ROWS = [
   ["ENTER", ..."ZXCVBNM".split(""), "DELETE"],
 ];
 
-// 30 verschiedene Erfolgsmeldungen – bei jedem Sieg wird zufällig eine gezeigt
-const SUCCESS_MESSAGES = [
-  "Gschafft!", "Hammer gmacht!", "Mega stark!", "Sauglatt!", "Weltklasse!",
-  "Bombig!", "Chapeau!", "Genial gmacht!", "Suuuper!", "Wahnsinn!",
-  "Voll cool!", "Meisterhaft!", "Krass drauf!", "Es Träumli!", "Perfekt glöst!",
-  "Huere guet!", "Gwaltig!", "Bravo!", "Fein gmacht!", "Absolute Klasse!",
-  "Beeindruckend!", "Top Leistig!", "Sensationell!", "Yes, gschafft!", "Stark, stark!",
-  "Nid schlecht!", "Volltreffer!", "Grandios!", "Zürcher Klasse!", "Tsüridle-Champion!",
+// Erfolgsmeldungen: manche mit Aktions-Button+Link (Shop-Rabatt / Member werden),
+// andere reine Züri-Sprüche ohne Button. Bei jedem Sieg wird eine zufällig gezeigt.
+const MESSAGES = [
+  // Shop-Rabatt
+  { text: "Du kennst Züri wie deine Westentasche. Zeit, es auch zu tragen! Gönn dir 10% auf Tsüri-Socken.", buttonLabel: "Jetzt einlösen", buttonLink: "https://shop.tsri.ch/discount/N5XQAKMVFACW" },
+  { text: "Bäm! Du hast das Rätsel geknackt. Hol dir deinen Sieger-Merch mit 10% Rabatt.", buttonLabel: "Rabatt einlösen!", buttonLink: "https://shop.tsri.ch/discount/N5XQAKMVFACW" },
+  { text: "Züri liebt dich – und wir auch! Zur Feier des Tages: 10% Rabatt auf alles.", buttonLabel: "Zum Tsüri-Shop", buttonLink: "https://shop.tsri.ch/discount/N5XQAKMVFACW" },
+  { text: "Rätsel-König:in! Setz dir die Krone auf – oder hol dir einfach 10% Rabatt im Tsüri-Shop.", buttonLabel: "Zum Shop", buttonLink: "https://shop.tsri.ch/discount/N5XQAKMVFACW" },
+  { text: "Du bist eine Legende! Zur Feier des Tages schenken wir dir 10% Rabatt im Tsüri-Shop.", buttonLabel: "Jetzt einlösen", buttonLink: "https://shop.tsri.ch/discount/N5XQAKMVFACW" },
+  // Member werden
+  { text: "Du bist schlau. Du weisst, dass gute Inhalte nicht gratis sind. Unterstütze unsere Redaktion!", buttonLabel: "Member werden!", buttonLink: "https://mitmachen.tsri.ch" },
+  { text: "Rätseln macht hungrig nach mehr Züri-News? Unterstütze unsere Arbeit als Member!", buttonLabel: "Tsüri unterstützen", buttonLink: "https://mitmachen.tsri.ch" },
+  { text: "Du liebst Züri. Wir auch. Lass uns gemeinsam diese Stadt besser machen.", buttonLabel: "Werde Teil der Community", buttonLink: "https://mitmachen.tsri.ch" },
+  { text: "Dieses Rätsel ist kostenlos und wird ermöglicht durch tausende Tsüri-Member.", buttonLabel: "Member werden", buttonLink: "https://mitmachen.tsri.ch" },
+  { text: "Unterstütze unabhängigen Journalismus in deiner Lieblingsstadt.", buttonLabel: "Tsüri supporten", buttonLink: "https://mitmachen.tsri.ch" },
+  { text: "Gelöst! Wenn dir unsere Rätsel den Tag versüssen, dann werde jetzt Tsüri-Member.", buttonLabel: "Member werden", buttonLink: "https://mitmachen.tsri.ch" },
+  { text: "Rekordzeit! Nutze die gesparte Zeit, um dich als Tsüri-Member anzumelden.", buttonLabel: "Hier entlang", buttonLink: "https://mitmachen.tsri.ch" },
+  { text: "Die NZZ schreibt morgen sicher einen Leitartikel darüber, dass dieses Rätsel „links-grüne Propaganda“ ist. Unterstütze uns, damit es uns weiter gibt!", buttonLabel: "Member werden", buttonLink: "https://mitmachen.tsri.ch" },
+  { text: "Die NZZ hätte dieses Rätsel längst hinter einer 25-Franken-Paywall versteckt. Bei uns bleibt es gratis. Dank unseren Membern.", buttonLabel: "Member werden", buttonLink: "https://mitmachen.tsri.ch" },
+  // Reine Züri-Sprüche, ohne Button
+  { text: "Wahnsinn! Die NZZ muss extra drei neue Fremdwörter erfinden, um deine Genialität zu beschreiben." },
+  { text: "Am Züriberg ploppt der Champagner! Deine Rätsel-Skills sind stadtweit bekannt." },
+  { text: "Für diese Meisterleistung würdest du am Sechseläuten sogar von den Zünftern ein anerkennendes Nicken ernten." },
+  { text: "Die NZZ titelt morgen: „Der Zerfall der Leistungskultur: Warum Zürcher lieber Rätsel lösen, statt Überstunden für die Wirtschaft zu machen.“" },
+  { text: "Der Böögg explodiert vor Neid bei deiner Rätsel-Geschwindigkeit!" },
+  { text: "Schneller gelöst als man an der Hardbrücke freies Velo-Plätzli findet." },
+  { text: "Deine Rätsel-Skills sind legendärer als die Warteschlange vor der Gelateria die Berna." },
+  { text: "Ist heute Street Parade? Nein, ganz Züri feiert deinen Rätsel-Triumpf." },
+  { text: "Du bist offiziell Zürcher Wort-Bürger:in." },
+  { text: "Die Tauben am HB applaudieren: Das Rätsel ist geschafft!" },
+  { text: "Du meisterst Wörter so geschickt, wie Zürcher:innen das Anstehen vor neuen Pop-up-Stores." },
+  { text: "Gratuliere. Dafür hättest du eine eigene Zunft am Sechseläuten verdient." },
+  { text: "Züri-Geschnetzeltes war gestern, du hast dieses Rätsel regelrecht filetiert!" },
+  { text: "So klug! Du solltest bei den nächsten Zürcher Stadtratswahlen kandidieren." },
+  { text: "Die NZZ titelt: Schweizer arbeiten immer weniger. Sie rätseln mehr und sind erfolgreich damit." },
+  { text: "Geschafft! Dafür spendieren wir dir (leider nur gedanklich) ein kühles Bier auf der Bäcki." },
+  { text: "Pass auf, in der Stadt Zürich gilt eigentlich auch fürs Denken flächendeckend Tempo 30!" },
+  { text: "Gratuliere. Diese Lösung war schwieriger zu finden als eine bezahlbare Wohnung im Kreis 3." },
 ];
 
 let state = {
@@ -309,8 +357,9 @@ const boardEl = document.getElementById("board");
 const keyboardEl = document.getElementById("keyboard");
 const messageEl = document.getElementById("message");
 const modalEl = document.getElementById("successModal");
-const successTitleEl = document.getElementById("successTitle");
 const successTimeEl = document.getElementById("successTime");
+const messageTextEl = document.getElementById("messageText");
+const messageBtnEl = document.getElementById("messageBtn");
 const shareGridEl = document.getElementById("shareGrid");
 const shareWhatsappBtn = document.getElementById("shareWhatsapp");
 const copyResultBtn = document.getElementById("copyResult");
@@ -441,8 +490,16 @@ function buildShareGrid() {
 }
 
 function showSuccessModal() {
-  const message = SUCCESS_MESSAGES[Math.floor(Math.random() * SUCCESS_MESSAGES.length)];
-  successTitleEl.textContent = message;
+  const message = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+  messageTextEl.textContent = message.text;
+  if (message.buttonLabel && message.buttonLink) {
+    messageBtnEl.textContent = message.buttonLabel;
+    messageBtnEl.href = message.buttonLink;
+    messageBtnEl.classList.remove("hidden");
+  } else {
+    messageBtnEl.classList.add("hidden");
+  }
+
   successTimeEl.textContent = state.elapsedMs !== null ? formatDuration(state.elapsedMs) : "–";
   const grid = buildShareGrid();
   shareGridEl.textContent = grid;
