@@ -627,6 +627,21 @@ document.addEventListener("keydown", (e) => {
   else if (/^[a-zA-ZäöüÄÖÜ]$/.test(e.key)) handleKey(e.key.toUpperCase());
 });
 
+// Bestmöglicher Versuch, den Tastatur-Fokus automatisch zu bekommen, ohne dass
+// man zuerst ins Iframe klicken muss. Browser blockieren das teils bewusst bei
+// eingebetteten Inhalten von einer anderen Domain (Sicherheitsmassnahme gegen
+// Seiten, die heimlich Tastatureingaben abgreifen) – funktioniert darum nicht
+// in jedem Browser gleich zuverlässig.
+window.addEventListener("load", () => {
+  try {
+    window.focus();
+    document.body.setAttribute("tabindex", "-1");
+    document.body.focus({ preventScroll: true });
+  } catch {
+    // Fokus-Anfrage wurde vom Browser blockiert – kein Problem, ein Klick reicht dann.
+  }
+});
+
 async function init() {
   renderBoard();
   renderKeyboard();
