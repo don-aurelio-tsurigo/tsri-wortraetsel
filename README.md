@@ -117,7 +117,30 @@ wir einen einfachen Zugriffsschlüssel ein.
 sich das genau gleich wie eure bestehenden Google-Apps-Script-Syncs
 periodisch abrufen und in eine Airtable-Tabelle schreiben.
 
+## Fehler-Benachrichtigung via Slack (optional)
+
+Falls Notion mal nicht erreichbar ist und der Worker auf ein Fallback-Wort
+ausweichen muss, kannst du dir eine Slack-Nachricht schicken lassen.
+
+1. Gehe zu https://api.slack.com/apps → **Create New App** → **From scratch**
+   → Namen geben (z.B. "Tsüri Worträtsel Alerts") → Workspace auswählen.
+2. Links im Menü **Incoming Webhooks** → aktivieren → **Add New Webhook to
+   Workspace** → Kanal auswählen (z.B. #tech-alerts).
+3. Kopiere die generierte Webhook-URL (`https://hooks.slack.com/services/...`).
+4. Im Worker-Ordner:
+   ```bash
+   npx wrangler secret put SLACK_WEBHOOK_URL
+   ```
+   (Wert = die kopierte URL)
+
+Ohne diesen Secret läuft alles wie bisher – die Benachrichtigung ist einfach
+ausgeschaltet, solange `SLACK_WEBHOOK_URL` nicht gesetzt ist. Es gibt maximal
+eine Nachricht alle 15 Minuten, damit du bei einem längeren Ausfall nicht
+zugespamt wirst.
+
 ## Wie es funktioniert
+
+
 
 
 
