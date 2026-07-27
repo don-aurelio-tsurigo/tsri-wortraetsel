@@ -294,6 +294,17 @@
   </div>
 </div>
 
+<div id="lossModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>Leider verloren 😔</h2>
+    <p class="modal-time">Das Wort war: <strong id="lossSolution"></strong></p>
+    <div class="message-box">
+      <p id="lossMessageText"></p>
+    </div>
+    <button class="modal-close" id="closeLossModal">Schliessen</button>
+  </div>
+</div>
+
 <script>
 // Frontend und Backend laufen auf derselben Cloudflare-Worker-URL,
 // darum reichen relative Pfade – keine Konfiguration nötig.
@@ -358,6 +369,25 @@ const MESSAGES = [
   { text: "Dieses Genie! Die ETH überlegt bereits, dir einen Ehrendoktor zu verleihen." },
 ];
 
+// Wenn die einbettende Seite ?member=1 an die Iframe-URL anhängt (z.B. für
+// eingeloggte Tsüri-Member), blenden wir die "Werde Member"-Aufrufe aus dem
+// Zufalls-Pool aus. Rabatt-Sprüche und reine Züri-Sprüche bleiben erhalten.
+const isMember = new URLSearchParams(window.location.search).get("member") === "1";
+const AVAILABLE_MESSAGES = isMember
+  ? MESSAGES.filter((m) => m.buttonLink !== "https://mitmachen.tsri.ch")
+  : MESSAGES;
+
+// Sprüche für den Verloren-Fall – bei jedem Fehlversuch wird einer zufällig gezeigt
+const LOSE_MESSAGES = [
+  "Falsch! Aber tröste dich: Eine bezahlbare Wohnung im Kreis 3 zu finden, ist noch viel hoffnungsloser als dieses Rätsel.",
+  "Das war wohl nichts. Dein Wortschatz ist aktuell leerer als ein WG-Kühlschrank am Sonntagabend.",
+  "Die NZZ-Redaktion weint leise über diesen intellektuellen Totalausfall und schreibt bereits einen Leitartikel über den Verfall des Zürcher Bildungssystems.",
+  "Das ging gründlicher schief als der letzte Versuch der FDP, das Stadtpräsidium zurückzuerobern.",
+  "Tja, Roger Schawinski hätte die Lösung gewusst.",
+  "Bitte aussteigen, Kopf lüften und die nächste Runde abwarten.",
+  "SRF Meteo meldet für deinen Kopf: Starke Bewölkung mit lokalem Unwissen. Nächster Versuch!",
+];
+
 let state = {
   wordId: null,
   attempt: 0,
@@ -367,6 +397,7 @@ let state = {
   keyStates: {}, // Buchstabe -> "correct" | "present" | "absent"
   startTime: null,
   elapsedMs: null,
+  solution: null,
 };
 
 const boardEl = document.getElementById("board");
@@ -382,6 +413,10 @@ const shareWhatsappBtn = document.getElementById("shareWhatsapp");
 const copyResultBtn = document.getElementById("copyResult");
 const copyFeedbackEl = document.getElementById("copyFeedback");
 const closeModalBtn = document.getElementById("closeModal");
+const lossModalEl = document.getElementById("lossModal");
+const lossSolutionEl = document.getElementById("lossSolution");
+const lossMessageTextEl = document.getElementById("lossMessageText");
+const closeLossModalBtn = document.getElementById("closeLossModal");
 
 function storageKey(wordId) {
   return "tsri_wortraetsel_state_" + wordId;
@@ -408,6 +443,7 @@ function saveLocalState() {
       keyStates: state.keyStates,
       startTime: state.startTime,
       elapsedMs: state.elapsedMs,
+      solution: state.solution,
     })
   );
 }
@@ -510,7 +546,7 @@ function showSuccessModal() {
   const title = TITLE_WORDS[Math.floor(Math.random() * TITLE_WORDS.length)];
   successTitleEl.textContent = title + " 🎉";
 
-  const message = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+  const message = AVAILABLE_MESSAGES[Math.floor(Math.random() * AVAILABLE_MESSAGES.length)];
   messageTextEl.textContent = message.text;
   if (message.buttonLabel && message.buttonLink) {
     messageBtnEl.textContent = message.buttonLabel;
@@ -549,6 +585,17 @@ function showSuccessModal() {
 
   modalEl.classList.remove("hidden");
 }
+
+function showLossModal(solution) {
+  lossSolutionEl.textContent = solution || "?";
+  const msg = LOSE_MESSAGES[Math.floor(Math.random() * LOSE_MESSAGES.length)];
+  lossMessageTextEl.textContent = msg;
+  lossModalEl.classList.remove("hidden");
+}
+
+closeLossModalBtn.addEventListener("click", () => {
+  lossModalEl.classList.add("hidden");
+});
 
 closeModalBtn.addEventListener("click", () => {
   modalEl.classList.add("hidden");
@@ -597,10 +644,12 @@ async function submitGuess() {
       return;
     } else if (state.attempt >= MAX_ATTEMPTS) {
       state.finished = true;
-      setMessage(
-        data.solution ? "Verloren – das Wort war: " + data.solution : "Verloren.",
-        "error"
-      );
+      state.solution = data.solution || null;
+      saveLocalState();
+      renderBoard();
+      renderKeyboard();
+      showLossModal(state.solution);
+      return;
     }
 
     saveLocalState();
@@ -661,12 +710,13 @@ async function init() {
       state.keyStates = saved.keyStates || {};
       state.startTime = saved.startTime ?? null;
       state.elapsedMs = saved.elapsedMs ?? null;
+      state.solution = saved.solution ?? null;
       if (state.finished) {
         const last = state.board[state.board.length - 1];
         if (last && last.feedback.every((f) => f === "correct")) {
           showSuccessModal();
         } else {
-          setMessage("Für heute schon gespielt.", "");
+          showLossModal(state.solution);
         }
       }
     }
