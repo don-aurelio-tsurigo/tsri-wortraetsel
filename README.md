@@ -89,7 +89,13 @@ automatisch, ohne dass du etwas tun musst.
 **Stats abrufen:** Öffne im Browser
 `https://tsri-wortraetsel.<dein-konto>.workers.dev/api/stats`
 
-Antwort z.B.:
+Oder noch einfacher – eine fertige Übersichtsseite statt rohem JSON:
+`https://tsri-wortraetsel.<dein-konto>.workers.dev/stats.html`
+
+Zeigt Spiele/Siege/Gewinnrate/Ø Versuche/Ø Zeit als Tabelle mit Umschalter
+für 7/30/90 Tage – wird automatisch mitausgeliefert, kein extra Setup nötig.
+
+Antwort von `/api/stats` z.B.:
 ```json
 {
   "ok": true,
