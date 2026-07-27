@@ -130,8 +130,22 @@ function evaluateGuess(guess, answer) {
   return result;
 }
 
+// schreibt eine Zeile pro abgeschlossenem Spiel (Sieg oder Verlust) für die Stats.
+// Läuft "fire and forget" via waitUntil, damit die Antwort ans Frontend nicht wartet.
+async function logGameResult(env, ctx, { won, attempts, elapsedSeconds, wordId }) {
+  if (!env.DB) return; // falls D1 mal nicht gebunden ist, einfach überspringen
+  const promise = env.DB.prepare(
+    "INSERT INTO game_results (date, won, attempts, time_seconds, word_id) VALUES (?, ?, ?, ?, ?)"
+  )
+    .bind(todayZurichISODate(), won ? 1 : 0, attempts, elapsedSeconds ?? null, wordId)
+    .run()
+    .catch((err) => console.error("Stats-Logging fehlgeschlagen:", err));
+  if (ctx?.waitUntil) ctx.waitUntil(promise);
+  else await promise;
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const headers = corsHeaders(request.headers.get("Origin"), env);
 
@@ -165,6 +179,9 @@ export default {
 
       const guess = String(body.guess || "").trim().toUpperCase();
       const attempt = Number(body.attempt) || 1;
+      const elapsedSeconds = Number.isFinite(Number(body.elapsedSeconds))
+        ? Math.round(Number(body.elapsedSeconds))
+        : null;
 
       if (!/^[A-Z]{5}$/.test(guess)) {
         return jsonResponse(
@@ -190,6 +207,10 @@ export default {
       const finished = solved || attempt >= 6;
       const wordId = await getWordId(answer);
 
+      if (finished) {
+        await logGameResult(env, ctx, { won: solved, attempts: attempt, elapsedSeconds, wordId });
+      }
+
       const response = {
         validWord: true,
         feedback,
@@ -200,6 +221,34 @@ export default {
       };
 
       return jsonResponse(response, 200, headers);
+    }
+
+    // GET /api/stats -> einfache Tages-Statistiken (Spiele, Siege, Ø Versuche/Zeit)
+    if (url.pathname === "/api/stats" && request.method === "GET") {
+      if (!env.DB) {
+        return jsonResponse({ error: "Keine Datenbank gebunden." }, 503, headers);
+      }
+      try {
+        const days = Math.min(Number(url.searchParams.get("days")) || 30, 90);
+        const { results } = await env.DB.prepare(
+          `SELECT
+             date,
+             COUNT(*) AS spiele,
+             SUM(won) AS siege,
+             ROUND(AVG(attempts), 2) AS avg_versuche,
+             ROUND(AVG(time_seconds), 1) AS avg_zeit_sekunden
+           FROM game_results
+           WHERE date >= date('now', ?)
+           GROUP BY date
+           ORDER BY date DESC`
+        )
+          .bind(`-${days} days`)
+          .all();
+
+        return jsonResponse({ ok: true, days: results }, 200, headers);
+      } catch (err) {
+        return jsonResponse({ error: err.message }, 500, headers);
+      }
     }
 
     return jsonResponse({ error: "Not found" }, 404, headers);
