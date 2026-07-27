@@ -4,6 +4,25 @@ import wordList from "./words.json";
 const VALID_WORDS = new Set(wordList);
 const WORD_LENGTH = 5;
 
+// Notfall-Wortliste: kommt zum Einsatz, wenn Notion nicht erreichbar ist UND
+// es (z.B. nach einem Cold Start) auch kein zwischengespeichertes Wort mehr
+// gibt. Auswahl ist deterministisch pro Tag (nicht zufällig pro Anfrage),
+// damit an einem Tag alle dasselbe Fallback-Wort bekommen.
+const FALLBACK_WORDS = [
+  "APFEL", "STUHL", "TISCH", "BLUME", "KATZE", "HUNDE", "VOGEL", "TASSE",
+  "STERN", "WOLKE", "SONNE", "MONAT", "WOCHE", "JAHRE", "FARBE", "MUSIK",
+  "SCHUH", "BRIEF", "KREIS", "STADT", "WIESE", "TRAUM", "GEIST", "KRAFT",
+  "LICHT", "NACHT", "WOLLE",
+];
+
+function pickFallbackWord(dateStr) {
+  let hash = 0;
+  for (let i = 0; i < dateStr.length; i++) {
+    hash = (hash * 31 + dateStr.charCodeAt(i)) >>> 0;
+  }
+  return FALLBACK_WORDS[hash % FALLBACK_WORDS.length];
+}
+
 // einfacher In-Memory-Cache pro Worker-Instanz, damit nicht bei jedem
 // Rateversuch neu bei Notion angefragt werden muss
 let cache = { word: null, fetchedAt: 0 };
@@ -46,56 +65,70 @@ async function getActiveWord(env) {
     return cache.word;
   }
 
-  const res = await fetch(
-    `https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}/query`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.NOTION_TOKEN}`,
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        filter: {
-          and: [
-            { property: "Datenbanktyp", select: { equals: "ZüriBriefing" } },
-            { property: "Datum", date: { on_or_before: todayZurichISODate() } },
-            { property: "Wordle", rich_text: { is_not_empty: true } },
-          ],
+  try {
+    const res = await fetch(
+      `https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}/query`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.NOTION_TOKEN}`,
+          "Notion-Version": "2022-06-28",
+          "Content-Type": "application/json",
         },
-        sorts: [{ property: "Datum", direction: "descending" }],
-        page_size: 1,
-      }),
+        body: JSON.stringify({
+          filter: {
+            and: [
+              { property: "Datenbanktyp", select: { equals: "ZüriBriefing" } },
+              { property: "Datum", date: { on_or_before: todayZurichISODate() } },
+              { property: "Wordle", rich_text: { is_not_empty: true } },
+            ],
+          },
+          sorts: [{ property: "Datum", direction: "descending" }],
+          page_size: 1,
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Notion-Anfrage fehlgeschlagen (${res.status}): ${errText}`);
     }
-  );
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Notion-Anfrage fehlgeschlagen (${res.status}): ${errText}`);
+    const data = await res.json();
+    const page = data.results && data.results[0];
+    if (!page) {
+      throw new Error(
+        "Kein ZüriBriefing-Eintrag mit ausgefülltem Wordle-Feld gefunden (Datum <= heute)."
+      );
+    }
+
+    const rawWord = (page.properties?.Wordle?.rich_text || [])
+      .map((t) => t.plain_text)
+      .join("")
+      .trim()
+      .toUpperCase();
+
+    if (!/^[A-Z]{5}$/.test(rawWord)) {
+      throw new Error(
+        `Ungültiges Wort im Wordle-Feld gefunden: "${rawWord}". Erwartet werden genau 5 Buchstaben A-Z.`
+      );
+    }
+
+    cache = { word: rawWord, fetchedAt: now };
+    return rawWord;
+  } catch (err) {
+    // Notion kurz down/überlastet o.ä.: falls wir schon mal erfolgreich ein Wort
+    // geholt haben, nutzen wir das weiter (auch wenn's älter als 60s ist).
+    if (cache.word) {
+      console.error("Notion-Abfrage fehlgeschlagen, nutze letztes bekanntes Wort:", err.message);
+      return cache.word;
+    }
+    // Kein gecachtes Wort vorhanden (z.B. Cold Start genau während eines
+    // Notion-Ausfalls): deterministisches Fallback-Wort für den heutigen Tag,
+    // damit das Spiel trotzdem für alle gleich spielbar bleibt.
+    console.error("Notion-Abfrage fehlgeschlagen, nutze Fallback-Wort:", err.message);
+    return pickFallbackWord(todayZurichISODate());
   }
-
-  const data = await res.json();
-  const page = data.results && data.results[0];
-  if (!page) {
-    throw new Error(
-      "Kein ZüriBriefing-Eintrag mit ausgefülltem Wordle-Feld gefunden (Datum <= heute)."
-    );
-  }
-
-  const rawWord = (page.properties?.Wordle?.rich_text || [])
-    .map((t) => t.plain_text)
-    .join("")
-    .trim()
-    .toUpperCase();
-
-  if (!/^[A-Z]{5}$/.test(rawWord)) {
-    throw new Error(
-      `Ungültiges Wort im Wordle-Feld gefunden: "${rawWord}". Erwartet werden genau 5 Buchstaben A-Z.`
-    );
-  }
-
-  cache = { word: rawWord, fetchedAt: now };
-  return rawWord;
 }
 
 // kurzer, nicht umkehrbarer Hash des Wortes, damit das Frontend erkennen kann
