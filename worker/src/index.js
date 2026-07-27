@@ -428,9 +428,13 @@ function showSuccessModal() {
 
   const shareText =
     "Tsüridle ⏱ " + (state.elapsedMs !== null ? formatDuration(state.elapsedMs) : "?") +
-    "\n" + grid + "\n\n" + window.location.href;
+    "\n" + grid +
+    "\n\nZüri Briefing abonnieren und mitspielen: tsri.ch/briefing";
   shareWhatsappBtn.onclick = () => {
-    window.open("https://wa.me/?text=" + encodeURIComponent(shareText), "_blank");
+    // api.whatsapp.com statt wa.me: wa.me hat auf WhatsApp Web einen bekannten
+    // Encoding-Bug, bei dem Emojis als "�" ankommen. api.whatsapp.com
+    // funktioniert zuverlässig auf Mobile UND Web.
+    window.open("https://api.whatsapp.com/send?text=" + encodeURIComponent(shareText), "_blank");
   };
 
   modalEl.classList.remove("hidden");
