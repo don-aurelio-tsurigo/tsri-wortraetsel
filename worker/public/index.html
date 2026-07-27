@@ -612,7 +612,11 @@ async function submitGuess() {
     const res = await fetch(API_BASE + "/api/guess", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guess: state.currentGuess, attempt: state.attempt + 1 }),
+      body: JSON.stringify({
+        guess: state.currentGuess,
+        attempt: state.attempt + 1,
+        elapsedSeconds: state.startTime !== null ? Math.round((Date.now() - state.startTime) / 1000) : null,
+      }),
     });
     const data = await res.json();
 
