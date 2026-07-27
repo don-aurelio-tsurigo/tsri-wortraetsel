@@ -83,6 +83,12 @@
   .tile.absent { background: var(--absent); border-color: var(--absent); color: #fff; }
   .tile.pop { transform: scale(1.08); }
   .tile.shake { animation: shake 0.35s; }
+  .tile.flip { animation: flipReveal 0.5s ease forwards; }
+  @keyframes flipReveal {
+    0% { transform: rotateX(0deg); }
+    50% { transform: rotateX(90deg); }
+    100% { transform: rotateX(0deg); }
+  }
   @keyframes shake {
     10%, 90% { transform: translateX(-2px); }
     20%, 80% { transform: translateX(4px); }
@@ -398,6 +404,7 @@ let state = {
   startTime: null,
   elapsedMs: null,
   solution: null,
+  animating: false,
 };
 
 const boardEl = document.getElementById("board");
@@ -482,6 +489,32 @@ function renderBoard() {
   }
 }
 
+const FLIP_STAGGER_MS = 180; // Verzögerung zwischen den Kacheln einer Reihe
+const FLIP_HALF_MS = 250; // halbe Flip-Dauer, bis die Farbe umschlägt
+
+// Zeigt die Kacheln einer gerade abgeschickten Reihe nacheinander mit
+// Flip-Animation an (statt alle sofort einzufärben). Gibt ein Promise
+// zurück, das aufgelöst wird, sobald die letzte Kachel fertig geflippt ist.
+function revealRow(rowIndex, letters, feedback) {
+  const rowEl = boardEl.querySelectorAll(".row")[rowIndex];
+  if (!rowEl) return Promise.resolve();
+  const tiles = rowEl.querySelectorAll(".tile");
+
+  return new Promise((resolve) => {
+    tiles.forEach((tile, i) => {
+      setTimeout(() => {
+        tile.classList.add("flip");
+        setTimeout(() => {
+          tile.textContent = letters[i];
+          tile.classList.add("filled", feedback[i]);
+        }, FLIP_HALF_MS);
+      }, i * FLIP_STAGGER_MS);
+    });
+    const totalMs = (tiles.length - 1) * FLIP_STAGGER_MS + FLIP_HALF_MS * 2;
+    setTimeout(resolve, totalMs);
+  });
+}
+
 function renderKeyboard() {
   keyboardEl.innerHTML = "";
   KEYBOARD_ROWS.forEach((rowKeys) => {
@@ -514,7 +547,7 @@ function updateKeyStates(letters, feedback) {
 }
 
 async function handleKey(key) {
-  if (state.finished) return;
+  if (state.finished || state.animating) return;
   if (key === "ENTER") {
     submitGuess();
   } else if (key === "DELETE") {
@@ -631,8 +664,15 @@ async function submitGuess() {
     }
 
     const letters = state.currentGuess.split("");
-    state.board[state.attempt] = { letters, feedback: data.feedback };
-    updateKeyStates(letters, data.feedback);
+    const feedback = data.feedback;
+    const currentRowIndex = state.attempt;
+
+    state.animating = true;
+    await revealRow(currentRowIndex, letters, feedback);
+    state.animating = false;
+
+    state.board[currentRowIndex] = { letters, feedback };
+    updateKeyStates(letters, feedback);
     state.attempt += 1;
     state.currentGuess = "";
     state.wordId = data.wordId;
