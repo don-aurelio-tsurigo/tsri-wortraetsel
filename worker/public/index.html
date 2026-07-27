@@ -136,9 +136,14 @@
     color: #948F7E;
     text-align: center;
   }
-  @media (max-width: 380px) {
-    :root { --tile-size: 50px; --tile-gap: 6px; }
-    .key { height: 42px; font-size: 13px; }
+  @media (max-width: 480px) {
+    :root { --tile-size: 46px; --tile-gap: 6px; }
+    #app { padding: 8px 10px 10px; }
+    #message { min-height: 16px; margin-bottom: 4px; }
+    #board { margin-bottom: 12px; }
+    #keyboard { gap: 6px; }
+    .key { height: 40px; font-size: 13px; }
+    footer { margin-top: 8px; }
   }
 
   /* ---- Success-Dialog ---- */
