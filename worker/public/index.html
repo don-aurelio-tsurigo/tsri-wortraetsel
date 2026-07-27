@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-<title>Tsüridle</title>
+<title>Tsüri Worträtsel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -269,7 +269,7 @@
 
 <div id="successModal" class="modal-overlay hidden">
   <div class="modal">
-    <h2>Gschafft! 🎉</h2>
+    <h2 id="successTitle">Geschafft! 🎉</h2>
     <p class="modal-time">Gelöst in <strong id="successTime">0:00</strong></p>
     <div class="message-box">
       <p id="messageText"></p>
@@ -302,6 +302,14 @@ const KEYBOARD_ROWS = [
   ["ENTER", ..."ZXCVBNM".split(""), "DELETE"],
 ];
 
+// 20 verschiedene Titel-Wörter oben im Dialog – bei jedem Sieg wird eines zufällig gezeigt
+const TITLE_WORDS = [
+  "Geschafft!", "Grandios!", "Fantastisch!", "Grossartig!", "Meisterhaft!",
+  "Beeindruckend!", "Sensationell!", "Spitzenleistung!", "Bravo!", "Perfekt gelöst!",
+  "Hut ab!", "Stark!", "Wahnsinn!", "Ausgezeichnet!", "Volltreffer!",
+  "Grossartige Leistung!", "Klasse gemacht!", "Chapeau!", "Genial!", "Top gelöst!",
+];
+
 // Erfolgsmeldungen: manche mit Aktions-Button+Link (Shop-Rabatt / Member werden),
 // andere reine Züri-Sprüche ohne Button. Bei jedem Sieg wird eine zufällig gezeigt.
 const MESSAGES = [
@@ -325,12 +333,12 @@ const MESSAGES = [
   { text: "Wahnsinn! Die NZZ muss extra drei neue Fremdwörter erfinden, um deine Genialität zu beschreiben." },
   { text: "Am Züriberg ploppt der Champagner! Deine Rätsel-Skills sind stadtweit bekannt." },
   { text: "Für diese Meisterleistung würdest du am Sechseläuten sogar von den Zünftern ein anerkennendes Nicken ernten." },
-  { text: "Die NZZ titelt morgen: „Der Zerfall der Leistungskultur: Warum Zürcher lieber Rätsel lösen, statt Überstunden für die Wirtschaft zu machen.“" },
+  { text: "Die NZZ titelt morgen: „Der Zerfall der Leistungskultur: Warum Zürcher lieber Rätsel lösen.“" },
   { text: "Der Böögg explodiert vor Neid bei deiner Rätsel-Geschwindigkeit!" },
-  { text: "Schneller gelöst als man an der Hardbrücke freies Velo-Plätzli findet." },
+  { text: "Schneller gelöst als man an der Hardbrücke ein freies Velo-Plätzli findet." },
   { text: "Deine Rätsel-Skills sind legendärer als die Warteschlange vor der Gelateria die Berna." },
   { text: "Ist heute Street Parade? Nein, ganz Züri feiert deinen Rätsel-Triumpf." },
-  { text: "Du bist offiziell Zürcher Wort-Bürger:in." },
+  { text: "Du bist offiziell Wort-Bürger:in." },
   { text: "Die Tauben am HB applaudieren: Das Rätsel ist geschafft!" },
   { text: "Du meisterst Wörter so geschickt, wie Zürcher:innen das Anstehen vor neuen Pop-up-Stores." },
   { text: "Gratuliere. Dafür hättest du eine eigene Zunft am Sechseläuten verdient." },
@@ -340,6 +348,9 @@ const MESSAGES = [
   { text: "Geschafft! Dafür spendieren wir dir (leider nur gedanklich) ein kühles Bier auf der Bäcki." },
   { text: "Pass auf, in der Stadt Zürich gilt eigentlich auch fürs Denken flächendeckend Tempo 30!" },
   { text: "Gratuliere. Diese Lösung war schwieriger zu finden als eine bezahlbare Wohnung im Kreis 3." },
+  { text: "Zwingli würde im Grab rotieren. So viel Spass beim Rätseln ist eigentlich strengstens verboten." },
+  { text: "Sorry. Aber Roger Schawinski hätte dieses Rätsel viel schneller und besser gelöst als du." },
+  { text: "Dieses Genie! Die ETH überlegt bereits, dir einen Ehrendoktor zu verleihen." },
 ];
 
 let state = {
@@ -357,6 +368,7 @@ const boardEl = document.getElementById("board");
 const keyboardEl = document.getElementById("keyboard");
 const messageEl = document.getElementById("message");
 const modalEl = document.getElementById("successModal");
+const successTitleEl = document.getElementById("successTitle");
 const successTimeEl = document.getElementById("successTime");
 const messageTextEl = document.getElementById("messageText");
 const messageBtnEl = document.getElementById("messageBtn");
@@ -367,7 +379,7 @@ const copyFeedbackEl = document.getElementById("copyFeedback");
 const closeModalBtn = document.getElementById("closeModal");
 
 function storageKey(wordId) {
-  return "tsuridle_state_" + wordId;
+  return "tsri_wortraetsel_state_" + wordId;
 }
 
 function loadLocalState(wordId) {
@@ -490,6 +502,9 @@ function buildShareGrid() {
 }
 
 function showSuccessModal() {
+  const title = TITLE_WORDS[Math.floor(Math.random() * TITLE_WORDS.length)];
+  successTitleEl.textContent = title + " 🎉";
+
   const message = MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
   messageTextEl.textContent = message.text;
   if (message.buttonLabel && message.buttonLink) {
@@ -505,7 +520,7 @@ function showSuccessModal() {
   shareGridEl.textContent = grid;
 
   const shareText =
-    "Tsüridle ⏱ " + (state.elapsedMs !== null ? formatDuration(state.elapsedMs) : "?") +
+    "Tsüri Worträtsel ⏱ " + (state.elapsedMs !== null ? formatDuration(state.elapsedMs) : "?") +
     "\n" + grid +
     "\n\nZüri Briefing abonnieren und mitspielen: tsri.ch/briefing";
   shareWhatsappBtn.onclick = () => {
