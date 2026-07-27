@@ -77,7 +77,7 @@
     transition: transform 0.15s ease;
   }
   .tile.filled { border-color: #A8A8A8; }
-  .tile.cursor { background: var(--cursor); border-color: var(--cursor); }
+  .tile.cursor { border-color: var(--cursor); border-width: 3px; background: rgba(47, 128, 237, 0.08); }
   .tile.correct { background: var(--correct); border-color: var(--correct); color: #fff; }
   .tile.present { background: var(--present); border-color: var(--present); color: #fff; }
   .tile.absent { background: var(--absent); border-color: var(--absent); color: #fff; }
@@ -404,7 +404,8 @@ const LOSE_MESSAGES = [
 let state = {
   wordId: null,
   attempt: 0,
-  currentGuess: "",
+  letters: ["", "", "", "", ""],
+  cursor: 0,
   board: [], // Array von { letters, feedback }
   finished: false,
   keyStates: {}, // Buchstabe -> "correct" | "present" | "absent"
@@ -525,14 +526,21 @@ function renderBoard() {
         tile.textContent = submitted.letters[c] || "";
         tile.classList.add("filled", submitted.feedback[c]);
       } else if (isCurrent) {
-        const letter = state.currentGuess[c];
+        const letter = state.letters[c];
         if (letter) {
           tile.textContent = letter;
           tile.classList.add("filled");
-        } else if (c === state.currentGuess.length) {
-          // Cursor: zeigt an, wo der nächste Buchstabe hinkommt
+        }
+        if (c === state.cursor) {
+          // Cursor: zeigt an, welcher Buchstabe als Nächstes gesetzt/ersetzt wird
           tile.classList.add("cursor");
         }
+        tile.style.cursor = "pointer";
+        tile.addEventListener("click", () => {
+          if (state.finished || state.animating) return;
+          state.cursor = c;
+          renderBoard();
+        });
       }
       row.appendChild(tile);
     }
@@ -602,11 +610,19 @@ async function handleKey(key) {
   if (key === "ENTER") {
     submitGuess();
   } else if (key === "DELETE") {
-    state.currentGuess = state.currentGuess.slice(0, -1);
+    if (state.letters[state.cursor]) {
+      // Aktuelles Feld ist gefüllt -> nur dieses leeren, Cursor bleibt
+      state.letters[state.cursor] = "";
+    } else if (state.cursor > 0) {
+      // Aktuelles Feld ist schon leer -> einen zurück und das leeren
+      state.cursor -= 1;
+      state.letters[state.cursor] = "";
+    }
     renderBoard();
-  } else if (/^[A-ZÄÖÜ]$/.test(key) && state.currentGuess.length < WORD_LENGTH) {
+  } else if (/^[A-ZÄÖÜ]$/.test(key)) {
     if (state.startTime === null) state.startTime = Date.now(); // Timer startet beim 1. Buchstaben
-    state.currentGuess += key;
+    state.letters[state.cursor] = key;
+    if (state.cursor < WORD_LENGTH - 1) state.cursor += 1;
     renderBoard();
   }
 }
@@ -630,8 +646,7 @@ function showSuccessModal(globalStats) {
   const stats = globalStats || loadGlobalStats();
   const title = TITLE_WORDS[Math.floor(Math.random() * TITLE_WORDS.length)];
   successTitleEl.textContent = title + " 🎉";
-  successStreakEl.textContent =
-    "🔥 Serie: " + stats.currentStreak + (stats.maxStreak > 0 ? " · Rekord: " + stats.maxStreak : "");
+  successStreakEl.textContent = "🔥 Serie: " + stats.currentStreak;
 
   const message = AVAILABLE_MESSAGES[Math.floor(Math.random() * AVAILABLE_MESSAGES.length)];
   messageTextEl.textContent = message.text;
@@ -676,8 +691,7 @@ function showSuccessModal(globalStats) {
 function showLossModal(solution, globalStats) {
   const stats = globalStats || loadGlobalStats();
   lossSolutionEl.textContent = solution || "?";
-  lossStreakEl.textContent =
-    "Serie unterbrochen" + (stats.maxStreak > 0 ? " · Rekord: " + stats.maxStreak : "");
+  lossStreakEl.textContent = "Serie: " + stats.currentStreak;
   const msg = LOSE_MESSAGES[Math.floor(Math.random() * LOSE_MESSAGES.length)];
   lossMessageTextEl.textContent = msg;
   lossModalEl.classList.remove("hidden");
@@ -692,7 +706,8 @@ closeModalBtn.addEventListener("click", () => {
 });
 
 async function submitGuess() {
-  if (state.currentGuess.length !== WORD_LENGTH) {
+  const guess = state.letters.join("");
+  if (guess.length !== WORD_LENGTH || state.letters.some((l) => !l)) {
     setMessage("Zu wenig Buchstaben.", "error");
     shakeCurrentRow();
     return;
@@ -703,7 +718,7 @@ async function submitGuess() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        guess: state.currentGuess,
+        guess: guess,
         attempt: state.attempt + 1,
         elapsedSeconds: state.startTime !== null ? Math.round((Date.now() - state.startTime) / 1000) : null,
       }),
@@ -720,7 +735,7 @@ async function submitGuess() {
       return;
     }
 
-    const letters = state.currentGuess.split("");
+    const letters = guess.split("");
     const feedback = data.feedback;
     const currentRowIndex = state.attempt;
 
@@ -731,7 +746,8 @@ async function submitGuess() {
     state.board[currentRowIndex] = { letters, feedback };
     updateKeyStates(letters, feedback);
     state.attempt += 1;
-    state.currentGuess = "";
+    state.letters = ["", "", "", "", ""];
+    state.cursor = 0;
     state.wordId = data.wordId;
 
     if (data.solved) {
