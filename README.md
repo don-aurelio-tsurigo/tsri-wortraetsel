@@ -1,4 +1,4 @@
-# Tsüridle – Setup-Anleitung
+# Tsüri Worträtsel – Setup-Anleitung
 
 Alles läuft auf **einer einzigen Plattform: Cloudflare Workers**. Ein Deploy
 liefert sowohl das Spiel (HTML) als auch die API aus – keine zweite Plattform,
@@ -16,10 +16,10 @@ worker/
 ## 1. Notion einrichten
 
 1. Gehe zu https://www.notion.so/my-integrations → **New integration** → einen Namen geben
-   (z.B. "Tsüridle") → **Submit**. Kopiere das **Internal Integration Secret**
+   (z.B. "Tsüri Worträtsel") → **Submit**. Kopiere das **Internal Integration Secret**
    (beginnt mit `secret_` oder `ntn_`) – das brauchst du gleich als `NOTION_TOKEN`.
 2. Öffne die bestehende Datenbank **"ADMIN alle Einträge"** → **... (oben rechts)**
-   → **Connections** → deine Integration ("Tsüridle") hinzufügen, damit sie
+   → **Connections** → deine Integration ("Tsüri Worträtsel") hinzufügen, damit sie
    Zugriff hat.
 3. Die **Database ID** dieser Datenbank ist:
    `28ce29f5-f081-80b0-8c89-e01d1704dd87`
@@ -46,7 +46,7 @@ npx wrangler deploy
 ```
 
 Nach dem Deploy zeigt dir wrangler eine URL wie:
-`https://tsuridle.<dein-account>.workers.dev`
+`https://tsri-wortraetsel.<dein-account>.workers.dev`
 
 Das ist gleichzeitig die URL für die API **und** für das eingebettete Spiel.
 Fertig – kein separater Schritt fürs Frontend nötig.
@@ -55,11 +55,11 @@ Fertig – kein separater Schritt fürs Frontend nötig.
 
 ```html
 <iframe
-  src="https://tsuridle.<dein-account>.workers.dev"
+  src="https://tsri-wortraetsel.<dein-account>.workers.dev"
   width="100%"
   height="640"
   style="border:none; max-width:460px;"
-  title="Tsüridle"
+  title="Tsüri Worträtsel"
 ></iframe>
 ```
 
@@ -75,13 +75,53 @@ Optional: Falls ihr eine eigene Subdomain wollt (z.B. `wordle.tsri.ch` statt
 zumindest die Subdomain) über Cloudflare läuft – auch das ist im Free-Plan
 möglich (Cloudflare Custom Domains für Workers).
 
+## Activity-Stats
+
+Der Worker loggt bei jedem abgeschlossenen Spiel (gewonnen oder nach 6 Versuchen
+verloren) eine Zeile in eine Cloudflare-D1-Datenbank – ganz ohne persönliche
+Daten, nur: Datum, gewonnen/verloren, Anzahl Versuche, Zeit in Sekunden, und
+der anonyme Wort-Hash (gleicher, den auch das Frontend kennt).
+
+Die Datenbank (`tsri-wortraetsel-stats`) ist bereits angelegt und in
+`wrangler.toml` verknüpft – beim nächsten Deploy übernimmt Cloudflare das
+automatisch, ohne dass du etwas tun musst.
+
+**Stats abrufen:** Öffne im Browser
+`https://tsri-wortraetsel.<dein-konto>.workers.dev/api/stats`
+
+Antwort z.B.:
+```json
+{
+  "ok": true,
+  "days": [
+    { "date": "2026-07-27", "spiele": 214, "siege": 167, "avg_versuche": 3.4, "avg_zeit_sekunden": 51.2 },
+    { "date": "2026-07-26", "spiele": 198, "siege": 151, "avg_versuche": 3.6, "avg_zeit_sekunden": 58.0 }
+  ]
+}
+```
+Mit `?days=7` (oder einer anderen Zahl, max. 90) kannst du den Zeitraum
+eingrenzen, z.B. `/api/stats?days=7`.
+
+Dieser Endpoint ist aktuell **nicht durch ein Passwort geschützt** – jede:r
+mit der URL kann die aggregierten Zahlen sehen (keine persönlichen Daten,
+nur Tageszahlen). Falls du das absichern willst, sag Bescheid, dann bauen
+wir einen einfachen Zugriffsschlüssel ein.
+
+**Später nach Airtable ziehen:** Da die Antwort normales JSON ist, lässt
+sich das genau gleich wie eure bestehenden Google-Apps-Script-Syncs
+periodisch abrufen und in eine Airtable-Tabelle schreiben.
+
 ## Wie es funktioniert
 
-- **Wortliste zur Validierung:** `worker/src/words.json` enthält 2'846 gültige
-  deutsche 5-Buchstaben-Wörter (Quelle: öffentliche Wordle-Wortliste,
-  gefiltert auf reine A-Z-Wörter ohne Umlaute/ß). Nur Wörter aus dieser Liste
-  werden als Rateversuch akzeptiert. Du kannst die Datei jederzeit erweitern
-  oder eigene Wörter ergänzen (einfaches JSON-Array).
+
+
+- **Wortliste zur Validierung:** `worker/src/words.json` enthält 8'851 gültige
+  deutsche 5-Buchstaben-Wörter (zusammengeführt aus drei Quellen: einer
+  Wordle-spezifischen Liste, der Scrabble-tauglichen Tanglet-Wortliste und der
+  deutschen Hunspell/wngerman-Rechtschreibliste – alle auf reine A-Z-Wörter
+  ohne Umlaute/ß gefiltert und dedupliziert). Das deckt deutlich mehr gültige
+  Wortformen ab als die ursprüngliche Liste. Du kannst die Datei jederzeit
+  weiter erweitern oder eigene Wörter ergänzen (einfaches JSON-Array).
 - **Das Lösungswort selbst** wird nie ans Frontend geschickt – der Worker
   vergleicht serverseitig und schickt nur grün/gelb/grau zurück. Erst wenn
   das Spiel vorbei ist (gelöst oder 6 Versuche aufgebraucht), wird die Lösung
