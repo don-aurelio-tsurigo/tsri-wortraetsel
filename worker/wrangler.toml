@@ -1,0 +1,21 @@
+name = "tsuridle"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# Statische Dateien (das Spiel) werden direkt von Cloudflare ausgeliefert.
+# Anfragen an Pfade, die keiner Datei hier entsprechen (z.B. /api/guess),
+# werden automatisch an src/index.js weitergereicht.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Nicht-geheime Konfiguration
+[vars]
+# Frontend und Backend laufen auf derselben Domain -> CORS eigentlich nicht
+# nötig. "*" schadet aber nicht, falls du das Spiel später zusätzlich woanders
+# einbetten willst.
+ALLOWED_ORIGIN = "*"
+
+# Geheime Werte NICHT hier eintragen, sondern per CLI setzen:
+#   npx wrangler secret put NOTION_TOKEN
+#   npx wrangler secret put NOTION_DATABASE_ID
