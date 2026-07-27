@@ -9,6 +9,12 @@ compatibility_date = "2024-11-01"
 directory = "./public"
 binding = "ASSETS"
 
+# D1-Datenbank für einfache Tages-Statistiken (Spiele, Siege, Ø Versuche/Zeit)
+[[d1_databases]]
+binding = "DB"
+database_name = "tsri-wortraetsel-stats"
+database_id = "0c7f9c72-6331-4da3-a7c3-a386180e7c03"
+
 # Nicht-geheime Konfiguration
 [vars]
 # Frontend und Backend laufen auf derselben Domain -> CORS eigentlich nicht
