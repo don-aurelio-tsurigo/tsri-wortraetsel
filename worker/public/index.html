@@ -792,8 +792,16 @@ function shakeCurrentRow() {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Enter") handleKey("ENTER");
   else if (e.key === "Backspace") handleKey("DELETE");
+  else if (e.key === "ArrowLeft") moveCursor(-1);
+  else if (e.key === "ArrowRight") moveCursor(1);
   else if (/^[a-zA-ZäöüÄÖÜ]$/.test(e.key)) handleKey(e.key.toUpperCase());
 });
+
+function moveCursor(delta) {
+  if (state.finished || state.animating) return;
+  state.cursor = Math.min(WORD_LENGTH - 1, Math.max(0, state.cursor + delta));
+  renderBoard();
+}
 
 // Bestmöglicher Versuch, den Tastatur-Fokus automatisch zu bekommen, ohne dass
 // man zuerst ins Iframe klicken muss. Browser blockieren das teils bewusst bei
