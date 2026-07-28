@@ -808,15 +808,20 @@ function moveCursor(delta) {
 // eingebetteten Inhalten von einer anderen Domain (Sicherheitsmassnahme gegen
 // Seiten, die heimlich Tastatureingaben abgreifen) – funktioniert darum nicht
 // in jedem Browser gleich zuverlässig.
-window.addEventListener("load", () => {
-  try {
-    window.focus();
-    document.body.setAttribute("tabindex", "-1");
-    document.body.focus({ preventScroll: true });
-  } catch {
-    // Fokus-Anfrage wurde vom Browser blockiert – kein Problem, ein Klick reicht dann.
-  }
-});
+// In Safari (Desktop) verursacht der Versuch ein kurzes Flackern und blockiert
+// danach 2-3 Sekunden lang Tastatureingaben, darum wird er dort übersprungen.
+const isSafari = /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent);
+if (!isSafari) {
+  window.addEventListener("load", () => {
+    try {
+      window.focus();
+      document.body.setAttribute("tabindex", "-1");
+      document.body.focus({ preventScroll: true });
+    } catch {
+      // Fokus-Anfrage wurde vom Browser blockiert – kein Problem, ein Klick reicht dann.
+    }
+  });
+}
 
 async function init() {
   renderBoard();
