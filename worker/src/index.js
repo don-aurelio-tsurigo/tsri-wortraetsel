@@ -163,10 +163,18 @@ async function getActiveWord(env, ctx) {
   }
 }
 
-// kurzer, nicht umkehrbarer Hash des Wortes, damit das Frontend erkennen kann
-// "hat sich das Wort geändert?", ohne das Wort selbst zu verraten
-async function getWordId(word) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(word));
+// Hash der wordId basierend auf dem KALENDERTAG, nicht auf dem Wort-Inhalt.
+// Grund: Wenn irgendwann dasselbe Wort erneut verwendet wird (Wiederholung
+// nach Wochen/Monaten, oder weil das Sicherheitsnetz in getActiveWord() das
+// alte Wort weiterlaufen lässt), war die ID vorher IDENTISCH mit der ID von
+// damals. Das Frontend speichert den Spielstand in localStorage unter genau
+// dieser ID (tsri_wortraetsel_state_<wordId>) - bei einer Wort-Wiederholung
+// luden Spieler:innen so fälschlich ihren (oder eines anderen Nutzers auf
+// einem geteilten Gerät) alten, bereits abgeschlossenen Spielstand.
+// Mit dem Datum als Basis ist die ID an jedem Tag garantiert neu, unabhängig
+// davon, welches Wort aktiv ist.
+async function getWordId(dateStr) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(dateStr));
   const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return hex.slice(0, 12);
 }
@@ -221,8 +229,8 @@ export default {
     // GET /api/status -> nur unkritische Infos fürs Frontend beim Laden
     if (url.pathname === "/api/status" && request.method === "GET") {
       try {
-        const word = await getActiveWord(env, ctx); // stellt sicher, dass ein gültiges Wort existiert
-        const wordId = await getWordId(word);
+        await getActiveWord(env, ctx); // stellt sicher, dass ein gültiges Wort existiert
+        const wordId = await getWordId(todayZurichISODate());
         return jsonResponse(
           { ok: true, wordLength: WORD_LENGTH, maxAttempts: 6, wordId },
           200,
@@ -270,7 +278,7 @@ export default {
       const feedback = evaluateGuess(guess, answer);
       const solved = feedback.every((f) => f === "correct");
       const finished = solved || attempt >= 6;
-      const wordId = await getWordId(answer);
+      const wordId = await getWordId(todayZurichISODate());
 
       if (finished) {
         await logGameResult(env, ctx, { won: solved, attempts: attempt, elapsedSeconds, wordId });
